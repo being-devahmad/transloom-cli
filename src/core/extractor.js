@@ -57,8 +57,8 @@ function extractFromNode(node, sourceCode, filePath, results) {
 
   // JSX attributes: placeholder="Enter email"
   if (type === "jsx_attribute") {
-    const nameNode = node.childForFieldName("name");
-    const valueNode = node.childForFieldName("value");
+    const nameNode = node.namedChildren[0];
+    const valueNode = node.namedChildren[1];
     if (nameNode && valueNode) {
       const attrName = nameNode.text;
       if (TRANSLATABLE_ATTRS.has(attrName)) {

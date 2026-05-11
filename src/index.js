@@ -3,6 +3,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { initCommand } from "./commands/init.js";
 import { scanCommand } from "./commands/scan.js";
+import { statusCommand } from "./commands/status.js";
 
 const program = new Command();
 
@@ -29,6 +30,18 @@ program
   .action(async () => {
     try {
       await scanCommand();
+    } catch (err) {
+      console.error(chalk.red("\n  Unexpected error:"), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("status")
+  .description("Show account info, usage, and project config")
+  .action(async () => {
+    try {
+      await statusCommand();
     } catch (err) {
       console.error(chalk.red("\n  Unexpected error:"), err.message);
       process.exit(1);
