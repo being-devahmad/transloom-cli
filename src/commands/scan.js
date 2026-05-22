@@ -2,11 +2,20 @@ import chalk from "chalk";
 import ora from "ora";
 import Table from "cli-table3";
 import path from "path";
-import { loadConfig } from "../utils/config.js";
-import { validateKey, startScan, getScanResults, updateScanStatus } from "../api/client.js";
+import inquirer from "inquirer";
+import { execSync } from "child_process";
+import { loadConfig, saveConfig } from "../utils/config.js";
+import {
+  validateKey,
+  startScan,
+  getScanResults,
+  updateScanStatus,
+} from "../api/client.js";
 import { discoverFiles } from "../core/scanner.js";
 import { extractStrings } from "../core/extractor.js";
 import { writeTranslations } from "../core/writer.js";
+import { replaceStringsInFiles } from "../core/replacer.js";
+import { setupI18n } from "../core/i18nSetup.js";
 import { logger } from "../utils/logger.js";
 
 const POLL_INTERVAL_MS = 3000;
@@ -21,11 +30,13 @@ export async function scanCommand() {
   logger.blank();
 
   // ── Step 1: Config check ─────────────────────────────────────────────────
-  logger.step(1, 6, "Checking config…");
+  logger.step(1, 8, "Checking config…");
 
   const config = await loadConfig();
   if (!config) {
-    logger.error("No config found. Run " + chalk.cyan("transloom init") + " first!");
+    logger.error(
+      "No config found. Run " + chalk.cyan("transloom init") + " first!",
+    );
     logger.blank();
     process.exit(1);
   }
@@ -39,7 +50,9 @@ export async function scanCommand() {
   let userData;
   try {
     userData = await validateKey(config.apiKey);
-    spinner.succeed(chalk.dim(`Authenticated as ${chalk.white(userData.user.username)}`));
+    spinner.succeed(
+      chalk.dim(`Authenticated as ${chalk.white(userData.user.username)}`),
+    );
   } catch {
     spinner.fail("Invalid API key. Check your dashboard.");
     logger.blank();
@@ -52,14 +65,31 @@ export async function scanCommand() {
     userData.usage.scans_limit !== -1 &&
     userData.usage.scans_used >= userData.usage.scans_limit
   ) {
-    logger.error(`Scan limit reached (${userData.usage.scans_used}/${userData.usage.scans_limit}). Upgrade your plan.`);
+    logger.error(
+      `Scan limit reached (${userData.usage.scans_used}/${userData.usage.scans_limit}). Upgrade your plan.`,
+    );
     process.exit(1);
   }
 
   logger.blank();
 
+  // ── Ask: framework? ──────────────────────────────────────────────────────
+  const { framework } = await inquirer.prompt([
+    {
+      type: "list",
+      name: "framework",
+      message: "Which library or framework are you using?",
+      choices: [
+        { name: "Next.js", value: "nextjs" },
+        { name: "React.js", value: "react" },
+      ],
+    },
+  ]);
+  await saveConfig({ ...config, framework });
+  logger.blank();
+
   // ── Step 2: File discovery ────────────────────────────────────────────────
-  logger.step(2, 6, "Scanning files…");
+  logger.step(2, 8, "Scanning files…");
   const fileSpinner = ora({ text: "Discovering files…", indent: 2 }).start();
 
   const cwd = process.cwd();
@@ -73,8 +103,30 @@ export async function scanCommand() {
   fileSpinner.succeed(chalk.dim(`Found ${chalk.white(files.length)} files`));
   logger.blank();
 
+  // ── Ask: i18n setup? ─────────────────────────────────────────────────────
+  const { wantsI18n } = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "wantsI18n",
+      message: "Do you want to set up i18n in your project?",
+      default: true,
+    },
+  ]);
+  logger.blank();
+
+  // ── Ask: create GitHub PR? ────────────────────────────────────────────────
+  const { wantsPR } = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "wantsPR",
+      message: "Do you want to create a GitHub PR with these changes?",
+      default: false,
+    },
+  ]);
+  logger.blank();
+
   // ── Step 3: String extraction ─────────────────────────────────────────────
-  logger.step(3, 6, "Extracting hardcoded strings…");
+  logger.step(3, 8, "Extracting hardcoded strings…");
   const extractSpinner = ora({ text: "Parsing AST…", indent: 2 }).start();
 
   const allStrings = [];
@@ -87,57 +139,72 @@ export async function scanCommand() {
     allStrings.push(...strings.map((s) => ({ ...s, file: relFile })));
     parsed++;
     if (parsed % 10 === 0) {
-      extractSpinner.text = chalk.dim(`  Parsing… ${parsed}/${files.length} files`);
+      extractSpinner.text = chalk.dim(
+        `  Parsing… ${parsed}/${files.length} files`,
+      );
     }
   }
 
   if (allStrings.length === 0) {
-    extractSpinner.succeed(chalk.green("No hardcoded strings found! Your app is already i18n-ready 🎉"));
+    extractSpinner.succeed(
+      chalk.green(
+        "No hardcoded strings found! Your app is already i18n-ready 🎉",
+      ),
+    );
     logger.blank();
     process.exit(0);
   }
 
   extractSpinner.succeed(
-    chalk.dim(`Found ${chalk.white(allStrings.length)} hardcoded strings across ${chalk.white(files.length)} files`)
+    chalk.dim(
+      `Found ${chalk.white(allStrings.length)} hardcoded strings across ${chalk.white(files.length)} files`,
+    ),
   );
   logger.blank();
 
   // ── Step 4: Send to backend ───────────────────────────────────────────────
-  logger.step(4, 6, "Sending to Transloom…");
+  logger.step(4, 8, "Sending to Transloom…");
   const sendSpinner = ora({ text: "Uploading strings…", indent: 2 }).start();
 
   // Detect repo name from package.json or folder name
   let repoName = path.basename(cwd);
   try {
-    const { createRequire } = await import("module");
     const pkgPath = path.join(cwd, "package.json");
     const { default: fse } = await import("fs-extra");
     if (await fse.pathExists(pkgPath)) {
       const pkg = await fse.readJson(pkgPath);
       if (pkg.name) repoName = pkg.name;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   let scanId;
   try {
     const result = await startScan(config.apiKey, {
       repo: repoName,
       languages: config.languages,
-      framework: config.framework || "nextjs",
+      framework,
       strings: allStrings,
+      create_pr: wantsPR,
     });
     scanId = result.scan_id;
     sendSpinner.succeed(chalk.dim(`Scan started — ID: ${chalk.white(scanId)}`));
   } catch (err) {
-    sendSpinner.fail(`Server error: ${err.response?.data?.detail || err.message}`);
+    sendSpinner.fail(
+      `Server error: ${err.response?.data?.detail || err.message}`,
+    );
     process.exit(1);
   }
 
   logger.blank();
 
   // ── Step 5: Poll for results ──────────────────────────────────────────────
-  logger.step(5, 6, "AI is translating…");
-  const pollSpinner = ora({ text: "Waiting for translations…", indent: 2 }).start();
+  logger.step(5, 8, "AI is translating…");
+  const pollSpinner = ora({
+    text: "Waiting for translations…",
+    indent: 2,
+  }).start();
 
   let results;
   const pollDeadline = Date.now() + POLL_TIMEOUT_MS;
@@ -155,11 +222,15 @@ export async function scanCommand() {
       break;
     }
     if (results.status === "failed") {
-      pollSpinner.fail(`Translation failed: ${results.error || "Unknown error"}`);
+      pollSpinner.fail(
+        `Translation failed: ${results.error || "Unknown error"}`,
+      );
       process.exit(1);
     }
 
-    pollSpinner.text = chalk.dim(`  AI is working… (${Math.round((Date.now() - startTime) / 1000)}s)`);
+    pollSpinner.text = chalk.dim(
+      `  AI is working… (${Math.round((Date.now() - startTime) / 1000)}s)`,
+    );
   }
 
   if (!results || results.status !== "completed") {
@@ -170,7 +241,7 @@ export async function scanCommand() {
   logger.blank();
 
   // ── Step 6: Write files ───────────────────────────────────────────────────
-  logger.step(6, 6, "Writing translation files…");
+  logger.step(6, 8, "Writing translation files…");
   const writeSpinner = ora({ text: "Writing files…", indent: 2 }).start();
 
   const outputDir = path.join(cwd, config.outputDir);
@@ -179,10 +250,97 @@ export async function scanCommand() {
   try {
     writtenFiles = await writeTranslations(outputDir, results.translations);
     await updateScanStatus(config.apiKey, scanId, "files_written");
-    writeSpinner.succeed(chalk.dim(`Wrote ${chalk.white(writtenFiles.length)} files`));
+    writeSpinner.succeed(
+      chalk.dim(`Wrote ${chalk.white(writtenFiles.length)} files`),
+    );
   } catch (err) {
     writeSpinner.fail(`Failed to write files: ${err.message}`);
     process.exit(1);
+  }
+
+  logger.blank();
+
+  // ── Step 7: Replace hardcoded strings in source files ────────────────────
+  logger.step(7, 8, "Replacing hardcoded strings in source…");
+  const replaceSpinner = ora({
+    text: "Applying t() replacements…",
+    indent: 2,
+  }).start();
+
+  let replacedFiles = [];
+  try {
+    if (results.string_map && Object.keys(results.string_map).length > 0) {
+      replacedFiles = await replaceStringsInFiles(
+        allStrings,
+        results.string_map,
+        cwd,
+      );
+      replaceSpinner.succeed(
+        chalk.dim(
+          `Replaced strings in ${chalk.white(replacedFiles.length)} files`,
+        ),
+      );
+    } else {
+      replaceSpinner.succeed(chalk.dim("No replacements needed"));
+    }
+  } catch (err) {
+    replaceSpinner.warn(chalk.dim(`Replacement skipped: ${err.message}`));
+  }
+
+  // ── Step 8: i18n setup ───────────────────────────────────────────────────
+  logger.step(8, 8, "Setting up i18n…");
+
+  let setupFiles = [];
+  if (wantsI18n) {
+    // Install framework-specific i18n package
+    const pkgToInstall =
+      framework === "nextjs" ? "next-intl" : "i18next react-i18next";
+    const installSpinner = ora({
+      text: `Installing ${pkgToInstall}…`,
+      indent: 2,
+    }).start();
+    try {
+      execSync(`npm install ${pkgToInstall}`, { cwd, stdio: "pipe" });
+      installSpinner.succeed(
+        chalk.dim(`Installed ${chalk.white(pkgToInstall)}`),
+      );
+    } catch (err) {
+      installSpinner.warn(chalk.dim(`Package install failed: ${err.message}`));
+    }
+
+    // ── Ask: language selector component? ────────────────────────────────────
+    const { selectorChoice } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "selectorChoice",
+        message: "Do you have a language selector component in your project?",
+        choices: [
+          { name: "Yes, I already have one", value: "existing" },
+          { name: "No, please create it for me", value: "create" },
+          { name: "No, but I'll create it myself later", value: "later" },
+        ],
+      },
+    ]);
+    logger.blank();
+
+    const setupSpinner = ora({
+      text: "Checking i18n setup…",
+      indent: 2,
+    }).start();
+    try {
+      setupFiles = await setupI18n(cwd, config.languages, selectorChoice === "create");
+      if (setupFiles.length > 0) {
+        setupSpinner.succeed(
+          chalk.dim(`Created ${chalk.white(setupFiles.length)} i18n files`),
+        );
+      } else {
+        setupSpinner.succeed(chalk.dim("i18n already set up"));
+      }
+    } catch (err) {
+      setupSpinner.warn(chalk.dim(`Setup skipped: ${err.message}`));
+    }
+  } else {
+    logger.info("i18n setup skipped.");
   }
 
   // ── Summary ───────────────────────────────────────────────────────────────
@@ -191,10 +349,21 @@ export async function scanCommand() {
 
   const table = new Table({
     chars: {
-      top: "─", "top-mid": "─", "top-left": "┌", "top-right": "┐",
-      bottom: "─", "bottom-mid": "─", "bottom-left": "└", "bottom-right": "┘",
-      left: "│", "left-mid": "│", mid: "─", "mid-mid": "─",
-      right: "│", "right-mid": "│", middle: " ",
+      top: "─",
+      "top-mid": "─",
+      "top-left": "┌",
+      "top-right": "┐",
+      bottom: "─",
+      "bottom-mid": "─",
+      "bottom-left": "└",
+      "bottom-right": "┘",
+      left: "│",
+      "left-mid": "│",
+      mid: "─",
+      "mid-mid": "─",
+      right: "│",
+      "right-mid": "│",
+      middle: " ",
     },
     style: { head: [], border: ["dim"] },
   });
@@ -211,6 +380,20 @@ export async function scanCommand() {
     table.push([
       chalk.dim(" 📦 Files written"),
       chalk.white(writtenFiles.map((f) => path.relative(cwd, f)).join("\n")),
+    ]);
+  }
+
+  if (replacedFiles.length) {
+    table.push([
+      chalk.dim(" ✏️  Code updated"),
+      chalk.white(`${replacedFiles.length} source files`),
+    ]);
+  }
+
+  if (setupFiles.length) {
+    table.push([
+      chalk.dim(" ⚙️  i18n setup"),
+      chalk.white(setupFiles.join("\n")),
     ]);
   }
 

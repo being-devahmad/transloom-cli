@@ -2,7 +2,8 @@ import axios from "axios";
 
 const BASE_URL =
   process.env.TRANSLOOM_API_URL ||
-  "https://localeflow-backend.onrender.com";
+  // "https://localeflow-backend.onrender.com";
+  "http://localhost:8000";
 
 function makeClient(apiKey) {
   return axios.create({
@@ -35,6 +36,8 @@ export async function getScanResults(apiKey, scanId) {
 
 export async function updateScanStatus(apiKey, scanId, status) {
   const client = makeClient(apiKey);
-  const { data } = await client.patch(`/api/scans/${scanId}/update/`, { status });
+  const { data } = await client.patch(`/api/scans/${scanId}/update/`, {
+    status,
+  });
   return data;
 }

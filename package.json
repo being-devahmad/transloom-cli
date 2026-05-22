@@ -1,10 +1,10 @@
 {
   "name": "transloom",
-  "version": "0.1.0",
+  "version": "1.3.0",
   "description": "AI-powered i18n automation for React/Next.js",
   "type": "module",
   "bin": {
-    "transloom": "./src/index.js"
+    "transloom": "src/index.js"
   },
   "engines": {
     "node": ">=18.0.0"

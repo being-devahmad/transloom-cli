@@ -1,24 +1,26 @@
-import { cosmiconfig } from "cosmiconfig";
 import fs from "fs-extra";
 import path from "path";
 
 const CONFIG_FILE = ".transloom.json";
-const explorer = cosmiconfig("transloom");
+
+function getConfigPath() {
+  return path.join(process.cwd(), CONFIG_FILE);
+}
 
 export async function loadConfig() {
-  const result = await explorer.search();
-  return result ? result.config : null;
+  const dest = getConfigPath();
+  if (!(await fs.pathExists(dest))) return null;
+  return fs.readJson(dest);
 }
 
 export async function saveConfig(config) {
-  const dest = path.join(process.cwd(), CONFIG_FILE);
+  const dest = getConfigPath();
   await fs.writeJson(dest, config, { spaces: 2 });
   return dest;
 }
 
 export async function configExists() {
-  const result = await explorer.search();
-  return result !== null;
+  return fs.pathExists(getConfigPath());
 }
 
 export const DEFAULT_CONFIG = {
