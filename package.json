@@ -1,9 +1,30 @@
 {
   "name": "transloom",
-  "version": "2.1.2",
+  "version": "2.1.4",
   "description": "AI-powered i18n automation for React/Next.js",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/being-devahmad/transloom-cli"
+  },
+  "homepage": "https://localeflow.vercel.app",
+  "bugs": {
+    "url": "https://github.com/being-devahmad/transloom-cli/issues"
+  },
+  "keywords": [
+    "i18n",
+    "internationalization",
+    "translation",
+    "react",
+    "nextjs",
+    "next-intl",
+    "i18next",
+    "cli",
+    "automation",
+    "localization",
+    "ai"
+  ],
   "bin": {
     "transloom": "src/index.js"
   },
@@ -12,7 +33,10 @@
   },
   "files": [
     "src",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md"
   ],
   "scripts": {
     "start": "node src/index.js"
