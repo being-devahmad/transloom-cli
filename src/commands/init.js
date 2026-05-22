@@ -83,12 +83,23 @@ export async function initCommand() {
     },
   ]);
 
-  // 5. Save config
+  // 5. Namespace support
+  const { namespace } = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "namespace",
+      message: "Enable namespace support? (groups keys by feature: auth.login, dashboard.title)",
+      default: false,
+    },
+  ]);
+
+  // 6. Save config
   const config = {
     ...DEFAULT_CONFIG,
     apiKey,
     languages: ["en", ...languages.filter((l) => l !== "en")],
     outputDir,
+    namespace,
   };
 
   const configPath = await saveConfig(config);

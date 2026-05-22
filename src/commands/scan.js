@@ -16,6 +16,7 @@ import { extractStrings } from "../core/extractor.js";
 import { writeTranslations } from "../core/writer.js";
 import { replaceStringsInFiles } from "../core/replacer.js";
 import { setupI18n } from "../core/i18nSetup.js";
+import { applyNamespaces, nestTranslations } from "../core/namespace.js";
 import { logger } from "../utils/logger.js";
 
 const POLL_INTERVAL_MS = 3000;
@@ -290,6 +291,13 @@ export async function scanCommand({ dryRun = false } = {}) {
   if (Object.keys(results.translations).length === 0) {
     logger.error("Server returned empty translations. Please try again.");
     process.exit(1);
+  }
+
+  // ── Apply namespace grouping if enabled ──────────────────────────────────
+  if (config.namespace && results.string_map && results.translations) {
+    const namespacedStringMap = applyNamespaces(allStrings, results.string_map);
+    results.translations = nestTranslations(results.translations, results.string_map, namespacedStringMap);
+    results.string_map = namespacedStringMap;
   }
 
   // ── Ask: confirm string replacement ──────────────────────────────────────
