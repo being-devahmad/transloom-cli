@@ -5,12 +5,33 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function addImport(content, isClient) {
-  const importLine = isClient
-    ? `import { useTranslations } from '@/app/lib/i18n';\n`
-    : `import { getTranslations } from '@/app/lib/i18n-server';\n`;
+function getImportLine(framework, isClient) {
+  if (framework === "react") {
+    return `import { useTranslation } from 'react-i18next';\n`;
+  }
+  return isClient
+    ? `import { useTranslations } from 'next-intl';\n`
+    : `import { getTranslations } from 'next-intl/server';\n`;
+}
 
-  if (content.includes("useTranslations") || content.includes("getTranslations")) return content;
+function getHookLine(framework, isClient) {
+  if (framework === "react") {
+    return `\n  const { t } = useTranslation();`;
+  }
+  return isClient
+    ? `\n  const t = useTranslations();`
+    : `\n  const t = await getTranslations();`;
+}
+
+function alreadyHasImport(content, framework) {
+  if (framework === "react") return content.includes("useTranslation");
+  return content.includes("useTranslations") || content.includes("getTranslations");
+}
+
+function addImport(content, isClient, framework) {
+  if (alreadyHasImport(content, framework)) return content;
+
+  const importLine = getImportLine(framework, isClient);
 
   // Insert after "use client" directive if present
   const clientMatch = content.match(/^(['"]use client['"]);?\n/);
@@ -20,12 +41,10 @@ function addImport(content, isClient) {
   return importLine + content;
 }
 
-function addHookDeclaration(content, isClient) {
-  const hookLine = isClient
-    ? `\n  const t = useTranslations();`
-    : `\n  const t = await getTranslations();`;
+function addHookDeclaration(content, isClient, framework) {
+  const hookLine = getHookLine(framework, isClient);
 
-  if (content.includes("const t =")) return content;
+  if (content.includes("const t =") || content.includes("const { t }")) return content;
 
   // Match function body opening: must end with `) {` or `): ReturnType {`
   // Avoid matching destructured params: `function Foo({ ... }) {`
@@ -43,7 +62,7 @@ function addHookDeclaration(content, isClient) {
   return result;
 }
 
-export async function replaceStringsInFiles(allStrings, stringMap, cwd) {
+export async function replaceStringsInFiles(allStrings, stringMap, cwd, framework = "nextjs") {
   // Group strings by file
   const byFile = new Map();
   for (const str of allStrings) {
@@ -82,8 +101,8 @@ export async function replaceStringsInFiles(allStrings, stringMap, cwd) {
     }
 
     if (content !== original) {
-      content = addImport(content, isClient);
-      content = addHookDeclaration(content, isClient);
+      content = addImport(content, isClient, framework);
+      content = addHookDeclaration(content, isClient, framework);
       await fs.writeFile(absPath, content, "utf-8");
       modifiedFiles.push(absPath);
     }

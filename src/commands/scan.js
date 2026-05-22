@@ -274,6 +274,7 @@ export async function scanCommand() {
         allStrings,
         results.string_map,
         cwd,
+        framework,
       );
       replaceSpinner.succeed(
         chalk.dim(
