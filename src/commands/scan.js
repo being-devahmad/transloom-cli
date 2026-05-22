@@ -73,19 +73,23 @@ export async function scanCommand() {
 
   logger.blank();
 
-  // ── Ask: framework? ──────────────────────────────────────────────────────
-  const { framework } = await inquirer.prompt([
-    {
-      type: "list",
-      name: "framework",
-      message: "Which library or framework are you using?",
-      choices: [
-        { name: "Next.js", value: "nextjs" },
-        { name: "React.js", value: "react" },
-      ],
-    },
-  ]);
-  await saveConfig({ ...config, framework });
+  // ── Ask: framework? (skip if already saved in config) ───────────────────
+  let framework = config.framework;
+  if (!framework || (framework !== "nextjs" && framework !== "react")) {
+    const answer = await inquirer.prompt([
+      {
+        type: "list",
+        name: "framework",
+        message: "Which library or framework are you using?",
+        choices: [
+          { name: "Next.js", value: "nextjs" },
+          { name: "React.js", value: "react" },
+        ],
+      },
+    ]);
+    framework = answer.framework;
+    await saveConfig({ ...config, framework });
+  }
   logger.blank();
 
   // ── Step 2: File discovery ────────────────────────────────────────────────
@@ -207,13 +211,21 @@ export async function scanCommand() {
   }).start();
 
   let results;
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 5;
   const pollDeadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() < pollDeadline) {
     await sleep(POLL_INTERVAL_MS);
     try {
       results = await getScanResults(config.apiKey, scanId);
+      consecutiveErrors = 0;
     } catch {
+      consecutiveErrors++;
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        pollSpinner.fail(chalk.dim(`Server unreachable after ${MAX_CONSECUTIVE_ERRORS} attempts. Scan ID: ${chalk.white(scanId)}`));
+        process.exit(1);
+      }
       continue;
     }
 
@@ -234,11 +246,23 @@ export async function scanCommand() {
   }
 
   if (!results || results.status !== "completed") {
-    pollSpinner.fail("Timed out. Check your dashboard for results.");
+    pollSpinner.fail(
+      `Timed out waiting for translations. Scan ID: ${chalk.white(scanId)} — check your dashboard.`
+    );
     process.exit(1);
   }
 
   logger.blank();
+
+  // ── Validate backend response ─────────────────────────────────────────────
+  if (!results.translations || typeof results.translations !== "object") {
+    logger.error("Invalid response from server: translations missing.");
+    process.exit(1);
+  }
+  if (Object.keys(results.translations).length === 0) {
+    logger.error("Server returned empty translations. Please try again.");
+    process.exit(1);
+  }
 
   // ── Step 6: Write files ───────────────────────────────────────────────────
   logger.step(6, 8, "Writing translation files…");
@@ -269,7 +293,7 @@ export async function scanCommand() {
 
   let replacedFiles = [];
   try {
-    if (results.string_map && Object.keys(results.string_map).length > 0) {
+    if (results.string_map && typeof results.string_map === "object" && Object.keys(results.string_map).length > 0) {
       replacedFiles = await replaceStringsInFiles(
         allStrings,
         results.string_map,
@@ -329,7 +353,7 @@ export async function scanCommand() {
       indent: 2,
     }).start();
     try {
-      setupFiles = await setupI18n(cwd, config.languages, selectorChoice === "create", framework);
+      setupFiles = await setupI18n(cwd, config.languages, selectorChoice === "create", framework, config.outputDir);
       if (setupFiles.length > 0) {
         setupSpinner.succeed(
           chalk.dim(`Created ${chalk.white(setupFiles.length)} i18n files`),

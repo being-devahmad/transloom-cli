@@ -78,7 +78,12 @@ export async function replaceStringsInFiles(allStrings, stringMap, cwd, framewor
   for (const [absPath, strings] of byFile) {
     if (!(await fs.pathExists(absPath))) continue;
 
-    let content = await fs.readFile(absPath, "utf-8");
+    let content;
+    try {
+      content = await fs.readFile(absPath, "utf-8");
+    } catch {
+      continue;
+    }
     const original = content;
     const isClient =
       content.includes('"use client"') || content.includes("'use client'");

@@ -87,7 +87,7 @@ export async function initCommand() {
   const config = {
     ...DEFAULT_CONFIG,
     apiKey,
-    languages: ["en", ...languages],
+    languages: ["en", ...languages.filter((l) => l !== "en")],
     outputDir,
   };
 

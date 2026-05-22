@@ -54,16 +54,27 @@ export async function uninstallCommand() {
 
   // ── Step 2: Delete generated files ───────────────────────────────────────
   const isAppRouter = await fs.pathExists(path.join(cwd, "app"));
-  const libDir = isAppRouter ? path.join(cwd, "app", "lib") : path.join(cwd, "src", "lib");
+  const hasSrc = await fs.pathExists(path.join(cwd, "src"));
   const componentsDir = isAppRouter
     ? path.join(cwd, "app", "components")
     : path.join(cwd, "src", "components");
 
-  const filesToDelete = [
-    path.join(libDir, "i18n.ts"),
-    path.join(libDir, "I18nProvider.tsx"),
-    path.join(componentsDir, "LanguageSelector.tsx"),
-  ];
+  let filesToDelete = [];
+
+  if (framework === "nextjs") {
+    filesToDelete = [
+      path.join(cwd, "i18n", "request.ts"),
+      path.join(cwd, "middleware.ts"),
+      path.join(componentsDir, "LanguageSelector.tsx"),
+    ];
+  } else {
+    const baseDir = hasSrc ? path.join(cwd, "src") : cwd;
+    filesToDelete = [
+      path.join(baseDir, "i18n.ts"),
+      path.join(baseDir, "I18nProvider.tsx"),
+      path.join(baseDir, "components", "LanguageSelector.tsx"),
+    ];
+  }
 
   const filesSpinner = ora({ text: "Removing generated files…", indent: 2 }).start();
   const deleted = [];
@@ -76,6 +87,17 @@ export async function uninstallCommand() {
     } else {
       skipped.push(path.relative(cwd, file));
     }
+  }
+
+  // Remove i18n/ folder if empty (next-intl only)
+  if (framework === "nextjs") {
+    const i18nDir = path.join(cwd, "i18n");
+    try {
+      if (await fs.pathExists(i18nDir)) {
+        const remaining = await fs.readdir(i18nDir);
+        if (remaining.length === 0) await fs.remove(i18nDir);
+      }
+    } catch { /* ignore */ }
   }
 
   if (deleted.length > 0) {

@@ -1,9 +1,9 @@
 import fs from "fs-extra";
 import path from "path";
 
-function buildI18nConfig(languages) {
+function buildI18nConfig(languages, outputDir) {
   const imports = languages
-    .map((l) => `import ${l}Messages from "../public/locales/${l}.json";`)
+    .map((l) => `import ${l}Messages from "../${outputDir}/${l}.json";`)
     .join("\n");
 
   const resources = languages
@@ -80,7 +80,7 @@ export default function LanguageSelector() {
 `;
 }
 
-export async function setupI18next(cwd, languages, createSelector = true) {
+export async function setupI18next(cwd, languages, createSelector = true, outputDir = "public/locales") {
   const created = [];
 
   const srcDir = path.join(cwd, "src");
@@ -92,7 +92,7 @@ export async function setupI18next(cwd, languages, createSelector = true) {
   const i18nFile = path.join(baseDir, "i18n.ts");
   if (!(await fs.pathExists(i18nFile))) {
     await fs.ensureDir(baseDir);
-    await fs.writeFile(i18nFile, buildI18nConfig(languages));
+    await fs.writeFile(i18nFile, buildI18nConfig(languages, outputDir));
     created.push(path.relative(cwd, i18nFile));
   }
 
