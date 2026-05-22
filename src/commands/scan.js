@@ -21,7 +21,7 @@ import { logger } from "../utils/logger.js";
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-export async function scanCommand() {
+export async function scanCommand({ dryRun = false } = {}) {
   const startTime = Date.now();
 
   logger.blank();
@@ -166,6 +166,34 @@ export async function scanCommand() {
   );
   logger.blank();
 
+  // ── Dry run: show extracted strings and exit ──────────────────────────────
+  if (dryRun) {
+    const dryTable = new Table({
+      chars: {
+        top: "─", "top-mid": "─", "top-left": "┌", "top-right": "┐",
+        bottom: "─", "bottom-mid": "─", "bottom-left": "└", "bottom-right": "┘",
+        left: "│", "left-mid": "│", mid: "─", "mid-mid": "─",
+        right: "│", "right-mid": "│", middle: " ",
+      },
+      style: { head: [], border: ["dim"] },
+    });
+    dryTable.push(
+      [{ colSpan: 3, content: chalk.bold.yellow("  Dry Run — No files will be changed") }],
+      [chalk.dim(" File"), chalk.dim("Line"), chalk.dim("String")],
+    );
+    for (const s of allStrings.slice(0, 30)) {
+      dryTable.push([chalk.dim(s.file), chalk.dim(String(s.line)), chalk.white(s.text.slice(0, 60))]);
+    }
+    if (allStrings.length > 30) {
+      dryTable.push([{ colSpan: 3, content: chalk.dim(`  … and ${allStrings.length - 30} more`) }]);
+    }
+    console.log(dryTable.toString());
+    logger.blank();
+    logger.info(`Run without ${chalk.cyan("--dry-run")} to apply translations.`);
+    logger.blank();
+    process.exit(0);
+  }
+
   // ── Step 4: Send to backend ───────────────────────────────────────────────
   logger.step(4, 8, "Sending to Transloom…");
   const sendSpinner = ora({ text: "Uploading strings…", indent: 2 }).start();
@@ -264,6 +292,38 @@ export async function scanCommand() {
     process.exit(1);
   }
 
+  // ── Ask: confirm string replacement ──────────────────────────────────────
+  let proceedWithReplace = false;
+  if (results.string_map && typeof results.string_map === "object" && Object.keys(results.string_map).length > 0) {
+    const stringCount = Object.keys(results.string_map).length;
+    const fileSet = new Set(allStrings.filter((s) => results.string_map[s.text]).map((s) => s.file));
+
+    logger.blank();
+    console.log(chalk.bold.white("  Strings to be replaced in source files:"));
+    console.log(chalk.dim("  ─────────────────────────────────"));
+    const preview = Object.entries(results.string_map).slice(0, 8);
+    for (const [text, key] of preview) {
+      console.log(`  ${chalk.dim(text.slice(0, 40).padEnd(42))} → ${chalk.cyan(`t('${key}')`)}`);
+    }
+    if (stringCount > 8) {
+      console.log(chalk.dim(`  … and ${stringCount - 8} more`));
+    }
+    logger.blank();
+    console.log(chalk.dim(`  ${fileSet.size} file(s) will be modified`));
+    logger.blank();
+
+    const { confirmReplace } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "confirmReplace",
+        message: `Replace ${chalk.white(stringCount)} hardcoded strings with t() calls?`,
+        default: true,
+      },
+    ]);
+    proceedWithReplace = confirmReplace;
+    logger.blank();
+  }
+
   // ── Step 6: Write files ───────────────────────────────────────────────────
   logger.step(6, 8, "Writing translation files…");
   const writeSpinner = ora({ text: "Writing files…", indent: 2 }).start();
@@ -293,7 +353,7 @@ export async function scanCommand() {
 
   let replacedFiles = [];
   try {
-    if (results.string_map && typeof results.string_map === "object" && Object.keys(results.string_map).length > 0) {
+    if (proceedWithReplace && results.string_map && typeof results.string_map === "object" && Object.keys(results.string_map).length > 0) {
       replacedFiles = await replaceStringsInFiles(
         allStrings,
         results.string_map,
@@ -305,6 +365,8 @@ export async function scanCommand() {
           `Replaced strings in ${chalk.white(replacedFiles.length)} files`,
         ),
       );
+    } else if (!proceedWithReplace) {
+      replaceSpinner.succeed(chalk.dim("String replacement skipped"));
     } else {
       replaceSpinner.succeed(chalk.dim("No replacements needed"));
     }

@@ -5,6 +5,7 @@ import { initCommand } from "./commands/init.js";
 import { scanCommand } from "./commands/scan.js";
 import { statusCommand } from "./commands/status.js";
 import { uninstallCommand } from "./commands/uninstall.js";
+import { validateCommand } from "./commands/validate.js";
 
 const program = new Command();
 
@@ -28,9 +29,10 @@ program
 program
   .command("scan")
   .description("Scan project for hardcoded strings and translate them")
-  .action(async () => {
+  .option("--dry-run", "Show extracted strings without modifying any files")
+  .action(async (options) => {
     try {
-      await scanCommand();
+      await scanCommand({ dryRun: options.dryRun });
     } catch (err) {
       console.error(chalk.red("\n  Unexpected error:"), err.message);
       process.exit(1);
@@ -55,6 +57,18 @@ program
   .action(async () => {
     try {
       await uninstallCommand();
+    } catch (err) {
+      console.error(chalk.red("\n  Unexpected error:"), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("validate")
+  .description("Check config, API key, framework, and project setup")
+  .action(async () => {
+    try {
+      await validateCommand();
     } catch (err) {
       console.error(chalk.red("\n  Unexpected error:"), err.message);
       process.exit(1);
