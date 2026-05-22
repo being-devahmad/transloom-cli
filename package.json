@@ -1,7 +1,8 @@
 {
   "name": "transloom",
-  "version": "2.1.0",
+  "version": "2.1.2",
   "description": "AI-powered i18n automation for React/Next.js",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "transloom": "src/index.js"
@@ -10,7 +11,8 @@
     "node": ">=18.0.0"
   },
   "files": [
-    "src"
+    "src",
+    "README.md"
   ],
   "scripts": {
     "start": "node src/index.js"
