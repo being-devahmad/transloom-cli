@@ -328,7 +328,7 @@ export async function scanCommand() {
       indent: 2,
     }).start();
     try {
-      setupFiles = await setupI18n(cwd, config.languages, selectorChoice === "create");
+      setupFiles = await setupI18n(cwd, config.languages, selectorChoice === "create", framework);
       if (setupFiles.length > 0) {
         setupSpinner.succeed(
           chalk.dim(`Created ${chalk.white(setupFiles.length)} i18n files`),
