@@ -1,6 +1,6 @@
 {
   "name": "transloom",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "description": "AI-powered i18n automation for React/Next.js",
   "license": "MIT",
   "type": "module",
