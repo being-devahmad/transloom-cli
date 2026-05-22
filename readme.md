@@ -337,15 +337,6 @@ transloom scan
 
 ---
 
-## Publishing
-
-```bash
-npm version patch    # or minor / major
-npm publish
-```
-
----
-
 ## Related
 
 - 🌐 Dashboard: [localeflow.vercel.app](https://localeflow.vercel.app)

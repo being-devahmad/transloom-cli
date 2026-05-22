@@ -1,6 +1,6 @@
 {
   "name": "transloom",
-  "version": "1.3.0",
+  "version": "2.1.0",
   "description": "AI-powered i18n automation for React/Next.js",
   "type": "module",
   "bin": {
