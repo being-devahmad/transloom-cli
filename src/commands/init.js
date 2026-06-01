@@ -32,12 +32,18 @@ export async function initCommand() {
   }
 
   // 1. API Key
+  console.log(
+    chalk.dim(
+      "  Demo key: tl_demo_transloom_key  (get your own at https://transloom-kappa.vercel.app/dashboard)",
+    ),
+  );
+  logger.blank();
   const { apiKey } = await inquirer.prompt([
     {
-      type: "password",
+      type: "input",
       name: "apiKey",
       message: "Enter your API key:",
-      mask: "*",
+      default: "tl_demo_transloom_key",
       validate: (v) => (v.startsWith("tl_") ? true : "Key must start with tl_"),
     },
   ]);
@@ -47,11 +53,11 @@ export async function initCommand() {
   try {
     const result = await validateKey(apiKey);
     spinner.succeed(
-      chalk.green(`Authenticated as `) + chalk.bold(result.user.username)
+      chalk.green(`Authenticated as `) + chalk.bold(result.user.username),
     );
     if (result.usage) {
       logger.dim(
-        `Usage: ${result.usage.scans_used}/${result.usage.scans_limit === -1 ? "∞" : result.usage.scans_limit} scans`
+        `Usage: ${result.usage.scans_used}/${result.usage.scans_limit === -1 ? "∞" : result.usage.scans_limit} scans`,
       );
     }
   } catch {
@@ -88,7 +94,8 @@ export async function initCommand() {
     {
       type: "confirm",
       name: "namespace",
-      message: "Enable namespace support? (groups keys by feature: auth.login, dashboard.title)",
+      message:
+        "Enable namespace support? (groups keys by feature: auth.login, dashboard.title)",
       default: false,
     },
   ]);
@@ -108,8 +115,6 @@ export async function initCommand() {
   console.log(chalk.green("  ✅ Transloom initialized!"));
   logger.blank();
   logger.dim(`Config saved to ${configPath}`);
-  logger.info(
-    "Run " + chalk.cyan("transloom scan") + " to start!"
-  );
+  logger.info("Run " + chalk.cyan("transloom scan") + " to start!");
   logger.blank();
 }
