@@ -1,6 +1,6 @@
 {
   "name": "transloom",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "description": "AI-powered i18n automation for React/Next.js",
   "license": "MIT",
   "type": "module",
@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/being-devahmad/transloom-cli"
   },
-  "homepage": "https://localeflow.vercel.app",
+  "homepage": "https://transloom.vercel.app",
   "bugs": {
     "url": "https://github.com/being-devahmad/transloom-cli/issues"
   },

@@ -29,5 +29,5 @@ export const DEFAULT_CONFIG = {
   framework: "nextjs",
   outputDir: "public/locales",
   namespace: false,
-  ignore: ["node_modules", "dist", ".next", "build", "coverage", ".git"],
+  ignore: ["node_modules", "dist", ".next", "build", "coverage", ".git", "components/ui"],
 };

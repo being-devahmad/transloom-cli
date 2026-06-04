@@ -4,8 +4,21 @@ import path from "path";
 const EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
 
 export async function discoverFiles(rootDir, ignoreList = []) {
-  const ignored = new Set(ignoreList);
   const files = [];
+
+  function isIgnored(fullPath) {
+    const rel = path.relative(rootDir, fullPath).replace(/\\/g, "/");
+    const segments = rel.split("/");
+    return ignoreList.some((pattern) => {
+      const normalizedPattern = pattern.replace(/\\/g, "/");
+      // Match exact segment (e.g. "node_modules") or path prefix (e.g. "components/ui")
+      return (
+        segments.includes(normalizedPattern) ||
+        rel === normalizedPattern ||
+        rel.startsWith(normalizedPattern + "/")
+      );
+    });
+  }
 
   async function walk(dir) {
     let entries;
@@ -16,10 +29,10 @@ export async function discoverFiles(rootDir, ignoreList = []) {
     }
 
     for (const entry of entries) {
-      if (entry.name.startsWith(".") && entry.name !== ".") continue;
-      if (ignored.has(entry.name)) continue;
+      if (entry.name.startsWith(".")) continue;
 
       const fullPath = path.join(dir, entry.name);
+      if (isIgnored(fullPath)) continue;
 
       if (entry.isDirectory()) {
         await walk(fullPath);

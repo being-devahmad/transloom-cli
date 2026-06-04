@@ -46,17 +46,42 @@ function addHookDeclaration(content, isClient, framework) {
 
   if (content.includes("const t =") || content.includes("const { t }")) return content;
 
-  // Match function body opening: must end with `) {` or `): ReturnType {`
-  // Avoid matching destructured params: `function Foo({ ... }) {`
-  const fnRegex = /export\s+default\s+(?:async\s+)?function\s+\w*\s*\([^{}]*\)\s*(?::\s*[\w<>\[\]|&]+\s*)?\{/g;
-  let match;
+  // Pattern 1: export function / export default function
+  const fnRegex = /export\s+(?:default\s+)?(?:async\s+)?function\s+\w*\s*\([^{}]*\)\s*(?::\s*[\w<>\[\]|&. ]+\s*)?\{/g;
+  // Pattern 2: export const Foo = () => {  or  export const Foo = async () => {
+  const arrowRegex = /export\s+const\s+\w+\s*(?::\s*[\w<>.[\] |&]+)?\s*=\s*(?:async\s*)?\([^)]*\)\s*(?::\s*[\w<>[\]|&. ]+)?\s*=>\s*\{/g;
+
   let result = content;
   let offset = 0;
+  let injected = false;
 
-  while ((match = fnRegex.exec(content)) !== null) {
+  // Collect all matches from both patterns, sorted by position
+  const matches = [];
+  let m;
+  while ((m = fnRegex.exec(content)) !== null) matches.push(m);
+  while ((m = arrowRegex.exec(content)) !== null) matches.push(m);
+  matches.sort((a, b) => a.index - b.index);
+
+  for (const match of matches) {
+    if (injected) break;
+
+    // Server components need async function for await getTranslations()
+    if (!isClient && framework === "nextjs" && match[0].includes("function")) {
+      const fnDecl = match[0];
+      if (!fnDecl.includes("async ")) {
+        const asyncFnDecl = fnDecl.replace(
+          /^(export\s+(?:default\s+)?)function/,
+          "$1async function"
+        );
+        result = result.slice(0, match.index + offset) + asyncFnDecl + result.slice(match.index + match[0].length + offset);
+        offset += asyncFnDecl.length - fnDecl.length;
+      }
+    }
+
     const insertAt = match.index + match[0].length + offset;
     result = result.slice(0, insertAt) + hookLine + result.slice(insertAt);
     offset += hookLine.length;
+    injected = true;
   }
 
   return result;

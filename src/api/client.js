@@ -2,7 +2,7 @@ import axios from "axios";
 
 const BASE_URL =
   process.env.TRANSLOOM_API_URL ||
-  "https://localeflow-backend.onrender.com";
+  "https://transloom-backend.onrender.com";
   // "http://localhost:8000";
 
 function makeClient(apiKey) {

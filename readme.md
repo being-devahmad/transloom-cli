@@ -339,7 +339,7 @@ transloom scan
 
 ## Related
 
-- 🌐 Dashboard: [localeflow.vercel.app](https://localeflow.vercel.app)
+- 🌐 Dashboard: [transloom.vercel.app](https://transloom.app)
 - ⚙️ Backend: [github.com/being-devahmad/transloom-backend](https://github.com/being-devahmad/transloom-backend)
 - 📦 npm: [npmjs.com/package/transloom](https://npmjs.com/package/transloom)
 

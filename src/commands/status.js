@@ -66,7 +66,7 @@ export async function statusCommand() {
   if (scansLimit !== null && scansUsed >= scansLimit) {
     logger.blank();
     logger.warn("Scan limit reached. Upgrade your plan to continue scanning.");
-    logger.dim("  → https://localeflow.vercel.app/dashboard/billing");
+    logger.dim("  → https://transloom.vercel.app/dashboard/billing");
   }
 
   logger.blank();

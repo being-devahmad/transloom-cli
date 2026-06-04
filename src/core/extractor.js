@@ -1,6 +1,5 @@
 import Parser from "tree-sitter";
 import JavaScript from "tree-sitter-javascript";
-import path from "path";
 import fs from "fs-extra";
 
 const parser = new Parser();
@@ -23,6 +22,8 @@ const SKIP_PATTERNS = [
   /^\(.*\)$/,                              // Parenthesized expressions
   /^<.*>$/,                                // HTML/JSX tags
   /[=(){};]/,                              // Code syntax chars
+  /^:\s/,                                  // TypeScript type annotations (": SomeType")
+  /^[A-Z][a-zA-Z]+(?:<.*>)?$/,            // PascalCase type names (ComponentProps, ReactNode)
 ];
 
 const SKIP_CALL_NAMES = new Set([

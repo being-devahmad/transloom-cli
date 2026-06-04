@@ -1,4 +1,8 @@
-const SKIP_DIRS = new Set(["src", "app", "pages", "views", "screens", "features"]);
+const SKIP_DIRS = new Set([
+  "src", "app", "pages", "views", "screens", "features",
+  "components", "containers", "sections", "widgets",  // UI dirs — use filename as namespace
+  "hooks", "utils", "lib", "helpers", "services",     // Utility dirs
+]);
 const GENERIC_FILENAMES = new Set(["index", "page", "layout", "app", "root"]);
 
 export function getNamespace(filePath) {
@@ -46,6 +50,20 @@ export function applyNamespaces(allStrings, flatStringMap) {
   return namespaced;
 }
 
+// Recursively flatten { a: { b: "v" } } → { "a.b": "v" }
+function flattenObject(obj, prefix = "") {
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      Object.assign(result, flattenObject(value, fullKey));
+    } else {
+      result[fullKey] = value;
+    }
+  }
+  return result;
+}
+
 // { en: { login: "Login" } } → { en: { auth: { login: "Login" } } }
 export function nestTranslations(flatTranslations, flatStringMap, namespacedStringMap) {
   // flatKey → namespacedKey (e.g. "login" → "auth.login")
@@ -56,9 +74,11 @@ export function nestTranslations(flatTranslations, flatStringMap, namespacedStri
   }
 
   const nested = {};
-  for (const [lang, flatKeys] of Object.entries(flatTranslations)) {
+  for (const [lang, translations] of Object.entries(flatTranslations)) {
+    // Backend may return already-nested objects — flatten first
+    const flat = flattenObject(translations);
     nested[lang] = {};
-    for (const [flatKey, value] of Object.entries(flatKeys)) {
+    for (const [flatKey, value] of Object.entries(flat)) {
       const dottedKey = flatToNamespaced[flatKey] || flatKey;
       setNested(nested[lang], dottedKey, value);
     }
