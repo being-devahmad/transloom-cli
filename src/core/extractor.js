@@ -105,6 +105,51 @@ function extractFromNode(node, sourceCode, filePath, results) {
     return;
   }
 
+  // Template literals: `Hello ${name}` or `Welcome back!`
+  if (type === "template_string") {
+    const parts = node.namedChildren;
+    const staticParts = [];
+    const vars = [];
+    let hasComplexExpr = false;
+
+    for (const part of parts) {
+      if (part.type === "template_chars") {
+        staticParts.push(part.text);
+      } else if (part.type === "template_substitution") {
+        const inner = part.namedChildren[0];
+        if (!inner) { hasComplexExpr = true; break; }
+        // Only handle simple: ${name} or ${obj.name}
+        if (inner.type === "identifier") {
+          vars.push(inner.text);
+          staticParts.push(`{${inner.text}}`);
+        } else if (inner.type === "member_expression") {
+          const varName = inner.text.replace(/\./g, "_");
+          vars.push(inner.text);
+          staticParts.push(`{${varName}}`);
+        } else {
+          hasComplexExpr = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasComplexExpr) {
+      const text = staticParts.join("").trim();
+      const rawText = node.text; // full backtick string for replacer
+      if (!shouldSkip(text)) {
+        results.push({
+          text,
+          file: filePath,
+          line: node.startPosition.row + 1,
+          type: "template",
+          vars,
+          raw: rawText,
+        });
+      }
+    }
+    return;
+  }
+
   // String literals in known translatable calls: toast.success("Saved!")
   if (type === "call_expression") {
     const fnNode = node.childForFieldName("function");

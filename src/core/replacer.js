@@ -5,6 +5,16 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function buildTemplateCall(key, vars) {
+  if (!vars || vars.length === 0) return `t('${key}')`;
+  // Normalize member expressions: obj.name → obj_name as key, obj.name as value
+  const pairs = vars.map((v) => {
+    const varKey = v.replace(/\./g, "_");
+    return varKey === v ? varKey : `${varKey}: ${v}`;
+  });
+  return `t('${key}', { ${pairs.join(", ")} })`;
+}
+
 function getImportLine(framework, isClient) {
   if (framework === "react") {
     return `import { useTranslation } from 'react-i18next';\n`;
@@ -113,7 +123,7 @@ export async function replaceStringsInFiles(allStrings, stringMap, cwd, framewor
     const isClient =
       content.includes('"use client"') || content.includes("'use client'");
 
-    for (const { text, key, type } of strings) {
+    for (const { text, key, type, raw, vars } of strings) {
       const esc = escapeRegex(text);
 
       if (type === "jsx_text") {
@@ -134,6 +144,12 @@ export async function replaceStringsInFiles(allStrings, stringMap, cwd, framewor
         const sqRegex = new RegExp(`(?<![.\\w])('${esc}')`, "g");
         content = content.replace(dqRegex, `t('${key}')`);
         content = content.replace(sqRegex, `t('${key}')`);
+      } else if (type === "template") {
+        // Replace template literals: `Hello ${name}` → t('key', { name })
+        if (!raw) continue;
+        const rawEsc = escapeRegex(raw);
+        const tCall = buildTemplateCall(key, vars || []);
+        content = content.replace(new RegExp(rawEsc, "g"), tCall);
       }
     }
 
