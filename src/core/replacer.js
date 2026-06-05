@@ -127,6 +127,13 @@ export async function replaceStringsInFiles(allStrings, stringMap, cwd, framewor
           "g"
         );
         content = content.replace(attrRegex, `$1{t('${key}')}`);
+      } else if (type === "literal") {
+        // Replace string args in translatable calls: toast("Saved!") → toast(t('key'))
+        // Handles both double and single quotes
+        const dqRegex = new RegExp(`(?<![.\\w])("${esc}")`, "g");
+        const sqRegex = new RegExp(`(?<![.\\w])('${esc}')`, "g");
+        content = content.replace(dqRegex, `t('${key}')`);
+        content = content.replace(sqRegex, `t('${key}')`);
       }
     }
 
