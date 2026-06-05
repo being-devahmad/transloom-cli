@@ -80,6 +80,60 @@ export default function LanguageSelector() {
 `;
 }
 
+// Inject I18nProvider into main.tsx / main.jsx entry point
+async function injectProviderIntoEntry(cwd, baseDir, providerFile) {
+  const candidates = [
+    path.join(baseDir, "main.tsx"),
+    path.join(baseDir, "main.jsx"),
+    path.join(cwd, "src", "main.tsx"),
+    path.join(cwd, "src", "main.jsx"),
+    path.join(cwd, "main.tsx"),
+    path.join(cwd, "main.jsx"),
+  ];
+
+  for (const entryPath of candidates) {
+    if (!(await fs.pathExists(entryPath))) continue;
+
+    let content = await fs.readFile(entryPath, "utf-8");
+
+    // Skip if already wrapped
+    if (content.includes("I18nProvider")) return path.relative(cwd, entryPath);
+
+    // Build relative import path from entry file to provider file
+    const relProvider = path
+      .relative(path.dirname(entryPath), providerFile)
+      .replace(/\\/g, "/")
+      .replace(/\.(tsx|ts|jsx|js)$/, "");
+    const importPrefix = relProvider.startsWith(".") ? relProvider : `./${relProvider}`;
+
+    // Add import after last existing import line
+    const lastImport = [...content.matchAll(/^import .+/gm)].pop();
+    if (!lastImport) continue;
+
+    const importLine = `import I18nProvider from '${importPrefix}';\n`;
+    const insertAt = lastImport.index + lastImport[0].length + 1;
+    content = content.slice(0, insertAt) + importLine + content.slice(insertAt);
+
+    // Wrap <App /> with <I18nProvider>
+    // Handles: <App />, <App/>, <StrictMode><App /></StrictMode>
+    content = content.replace(
+      /(<React\.StrictMode>)([\s\S]*?)(<\/React\.StrictMode>)/,
+      (_, open, inner, close) =>
+        `${open}\n      <I18nProvider>${inner.trim()}</I18nProvider>\n    ${close}`
+    );
+
+    // Fallback: no StrictMode — wrap <App /> directly
+    if (!content.includes("I18nProvider>")) {
+      content = content.replace(/<App\s*\/>/, `<I18nProvider>\n        <App />\n      </I18nProvider>`);
+    }
+
+    await fs.writeFile(entryPath, content, "utf-8");
+    return path.relative(cwd, entryPath);
+  }
+
+  return null;
+}
+
 export async function setupI18next(cwd, languages, createSelector = true, outputDir = "public/locales") {
   const created = [];
 
@@ -103,6 +157,10 @@ export async function setupI18next(cwd, languages, createSelector = true, output
     await fs.writeFile(providerFile, buildI18nProvider());
     created.push(path.relative(cwd, providerFile));
   }
+
+  // Inject I18nProvider into entry point (main.tsx / main.jsx)
+  const injectedEntry = await injectProviderIntoEntry(cwd, baseDir, providerFile);
+  if (injectedEntry) created.push(`I18nProvider injected into ${injectedEntry}`);
 
   // src/components/LanguageSelector.tsx
   if (createSelector) {
