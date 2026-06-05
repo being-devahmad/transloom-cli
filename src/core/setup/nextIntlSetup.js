@@ -121,23 +121,45 @@ async function injectSelectorIntoHeader(cwd, selectorImportPath) {
   return null;
 }
 
-// Update next.config.mjs to add withNextIntl plugin
+// Update next.config.* to add withNextIntl plugin
 async function patchNextConfig(cwd) {
-  const configPath = path.join(cwd, "next.config.mjs");
-  if (!(await fs.pathExists(configPath))) {
+  // Find whichever config file exists — .mjs, .ts, .js
+  const candidates = ["next.config.mjs", "next.config.ts", "next.config.js"];
+  let configPath = null;
+
+  for (const name of candidates) {
+    const p = path.join(cwd, name);
+    if (await fs.pathExists(p)) { configPath = p; break; }
+  }
+
+  // None found — create .mjs as default
+  if (!configPath) {
+    configPath = path.join(cwd, "next.config.mjs");
     await fs.writeFile(configPath, buildNextConfig());
-    return true;
+    return path.basename(configPath);
   }
 
   const content = await fs.readFile(configPath, "utf-8");
   if (content.includes("next-intl/plugin") || content.includes("withNextIntl")) return false;
 
-  const patched =
-    `import createNextIntlPlugin from "next-intl/plugin";\nconst withNextIntl = createNextIntlPlugin("./i18n/request.ts");\n\n` +
-    content.replace(/export default (\w+);/, "export default withNextIntl($1);");
+  const ext = path.extname(configPath); // .mjs | .ts | .js
+  const isCJS = ext === ".js" && content.includes("module.exports");
+
+  let patched;
+  if (isCJS) {
+    // CommonJS: const withNextIntl = require(...); module.exports = withNextIntl({...})
+    patched =
+      `const { createNextIntlPlugin } = require("next-intl/plugin");\nconst withNextIntl = createNextIntlPlugin("./i18n/request.ts");\n\n` +
+      content.replace(/module\.exports\s*=\s*(\{[\s\S]*?\});/, "module.exports = withNextIntl($1);");
+  } else {
+    // ESM (.mjs or .ts): import + wrap export default
+    patched =
+      `import createNextIntlPlugin from "next-intl/plugin";\nconst withNextIntl = createNextIntlPlugin("./i18n/request.ts");\n\n` +
+      content.replace(/export default (\w+);/, "export default withNextIntl($1);");
+  }
 
   await fs.writeFile(configPath, patched, "utf-8");
-  return true;
+  return path.basename(configPath) + " (withNextIntl added)";
 }
 
 export async function setupNextIntl(cwd, languages, createSelector = true) {
@@ -156,9 +178,9 @@ export async function setupNextIntl(cwd, languages, createSelector = true) {
     created.push("i18n/request.ts");
   }
 
-  // next.config.mjs — add withNextIntl plugin
+  // next.config.* — add withNextIntl plugin
   const patched = await patchNextConfig(cwd);
-  if (patched) created.push("next.config.mjs (withNextIntl added)");
+  if (patched) created.push(patched);
 
   // LanguageSelector.tsx
   if (createSelector) {
